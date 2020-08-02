@@ -2,8 +2,6 @@ import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import { Animated, Dimensions, Modal, PanResponder, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const WINDOW_HEIGHT = Dimensions.get('window').height;
-const WINDOW_WIDTH = Dimensions.get('window').width;
 const DRAG_DISMISS_THRESHOLD = 150;
 const STATUS_BAR_OFFSET = (Platform.OS === 'android' ? -25 : 0);
 const isIOS = Platform.OS === 'ios';
@@ -12,9 +10,7 @@ const styles = StyleSheet.create({
   background: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT,
+    left: 0
   },
   open: {
     position: 'absolute',
@@ -27,7 +23,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: WINDOW_WIDTH,
     backgroundColor: 'transparent',
   },
   closeButton: {
@@ -82,9 +77,12 @@ export default class LightboxOverlay extends Component {
         y: 0,
         opacity: 1,
       },
+      windowWidth: 0,
+      windowHeight: 0,
       pan: new Animated.Value(0),
       openVal: new Animated.Value(0),
     };
+    this.recalculateDimensions();
     this._panResponder = PanResponder.create({
       // Ask to be the responder:
       onStartShouldSetPanResponder: (evt, gestureState) => !this.state.isAnimating,
@@ -108,7 +106,7 @@ export default class LightboxOverlay extends Component {
             target: {
               y: gestureState.dy,
               x: gestureState.dx,
-              opacity: 1 - Math.abs(gestureState.dy / WINDOW_HEIGHT)
+              opacity: 1 - Math.abs(gestureState.dy / this.state.windowHeight)
             }
           });
           this.close();
@@ -120,6 +118,13 @@ export default class LightboxOverlay extends Component {
         }
       },
     });
+  }
+
+  recalculateDimensions() {
+    this.setState({
+      windowWidth: Dimensions.get('window').width,
+      windowHeight: Dimensions.get('window').height
+    })
   }
 
   componentDidMount() {
@@ -206,18 +211,18 @@ export default class LightboxOverlay extends Component {
       dragStyle = {
         top: this.state.pan,
       };
-      lightboxOpacityStyle.opacity = this.state.pan.interpolate({inputRange: [-WINDOW_HEIGHT, 0, WINDOW_HEIGHT], outputRange: [0, 1, 0]});
+      lightboxOpacityStyle.opacity = this.state.pan.interpolate({inputRange: [-this.state.windowHeight, 0, this.state.windowHeight], outputRange: [0, 1, 0]});
     }
 
     const openStyle = [styles.open, {
       left:   openVal.interpolate({inputRange: [0, 1], outputRange: [origin.x, target.x]}),
       top:    openVal.interpolate({inputRange: [0, 1], outputRange: [origin.y + STATUS_BAR_OFFSET, target.y + STATUS_BAR_OFFSET]}),
-      width:  openVal.interpolate({inputRange: [0, 1], outputRange: [origin.width, WINDOW_WIDTH]}),
-      height: openVal.interpolate({inputRange: [0, 1], outputRange: [origin.height, WINDOW_HEIGHT]}),
+      width:  openVal.interpolate({inputRange: [0, 1], outputRange: [origin.width, this.state.windowWidth]}),
+      height: openVal.interpolate({inputRange: [0, 1], outputRange: [origin.height, this.state.windowHeight]}),
     }];
 
-    const background = (<Animated.View style={[styles.background, { backgroundColor: backgroundColor }, lightboxOpacityStyle]}></Animated.View>);
-    const header = (<Animated.View style={[styles.header, lightboxOpacityStyle]}>{(renderHeader ?
+    const background = (<Animated.View style={[styles.background, { backgroundColor: backgroundColor, width: this.state.windowWidth, height: this.state.windowHeight }, lightboxOpacityStyle]}></Animated.View>);
+    const header = (<Animated.View style={[styles.header, { width: this.state.windowWidth }, lightboxOpacityStyle]}>{(renderHeader ?
       renderHeader(this.close) :
       (
         <TouchableOpacity onPress={this.close}>
@@ -233,7 +238,7 @@ export default class LightboxOverlay extends Component {
 
     if (this.props.navigator) {
       return (
-        <View>
+        <View onLayout={() => {this.recalculateDimensions()}}>
           {background}
           {content}
           {header}
@@ -242,11 +247,13 @@ export default class LightboxOverlay extends Component {
     }
 
     return (
-      <Modal visible={isOpen} transparent={true} onRequestClose={() => this.close()}>
-        {background}
-        {content}
-        {header}
-      </Modal>
+      <View onLayout={() => {this.recalculateDimensions()}}>
+        <Modal visible={isOpen} transparent={true} onRequestClose={() => this.close()}>
+          {background}
+          {content}
+          {header}
+        </Modal>
+      </View>
     );
   }
 }
